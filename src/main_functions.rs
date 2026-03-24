@@ -1,19 +1,17 @@
 pub fn print_about() {
     println!("Authors: {}", env!("CARGO_PKG_AUTHORS"));
     println!("Version: {}", env!("CARGO_PKG_VERSION"));
-    println!("Git:");
-    println!(
-        "    Remote URL: {}",
-        option_env!("APP_GIT_REMOTE_URL").unwrap_or("local git repository")
-    );
-    println!(
-        "    Branch: {}",
-        option_env!("APP_GIT_BRANCH").unwrap_or("<unknown>")
-    );
-    println!(
-        "    Commit: {}",
-        option_env!("APP_GIT_COMMIT").unwrap_or("<unknown>")
-    );
+    // Git repo? -> info!
+    if !env!("APP_GIT_COMMIT").is_empty() {
+        println!("Git:");
+        // has a remote repository, so print all git info
+        if !env!("APP_GIT_REMOTE_URL").is_empty() {
+            println!("    Remote URL: {}", env!("APP_GIT_REMOTE_URL"));
+        }
+        println!("    Branch:     {}", env!("APP_GIT_BRANCH"));
+        println!("    Commit:     {}", env!("APP_GIT_COMMIT"));
+    }
+
     println!(
         "Compiler: {}",
         option_env!("APP_RUSTC_VERSION").unwrap_or("<unknown>")

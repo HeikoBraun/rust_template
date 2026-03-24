@@ -1,35 +1,55 @@
 use std::{error::Error, process::Command};
 
-fn git_remote_name() -> Result<String, Box<dyn Error>> {
-    let output = Command::new("git").args(["remote"]).output()?;
+fn git_remote_url(remote: &str) -> Option<String> {
+    let output = Command::new("git")
+        .args(["remote", "get-url", remote])
+        .output()
+        .ok()?;
 
     if !output.status.success() {
-        return Err(format!(
-            "git remote failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
+        return None;
     }
 
-    let text = String::from_utf8(output.stdout)?;
-    Ok(text.lines().next().unwrap_or("").trim().to_string())
+    let text = String::from_utf8(output.stdout).ok()?;
+    let url = text.trim();
+    if url.is_empty() {
+        None
+    } else {
+        Some(url.to_string())
+    }
 }
 
-fn git_branch_name() -> Result<String, Box<dyn Error>> {
+fn git_branch_name() -> Option<String> {
     let output = Command::new("git")
         .args(["branch", "--show-current"])
-        .output()?;
+        .output()
+        .ok()?;
 
     if !output.status.success() {
-        return Err(format!(
-            "git branch failed: {}",
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
+        return None;
     }
 
-    let text = String::from_utf8(output.stdout)?;
-    Ok(text.trim().to_string())
+    let text = String::from_utf8(output.stdout).ok()?;
+    let txt = text.trim();
+    if txt.is_empty() {
+        None
+    } else {
+        Some(txt.to_string())
+    }
+}
+
+fn git_commit_hash() -> Option<String> {
+    let output = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8(output.stdout).ok()?;
+    Some(text.trim().to_string())
 }
 
 fn deps_via_cargo_tree(kind: &str) -> Result<String, Box<dyn Error>> {
@@ -79,39 +99,6 @@ fn deps_via_cargo_tree(kind: &str) -> Result<String, Box<dyn Error>> {
     Ok(pairs.join(","))
 }
 
-fn git_remote_url(remote: &str) -> Option<String> {
-    let output = Command::new("git")
-        .args(["remote", "get-url", remote])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let text = String::from_utf8(output.stdout).ok()?;
-    let url = text.trim();
-    if url.is_empty() {
-        None
-    } else {
-        Some(url.to_string())
-    }
-}
-
-fn git_commit_hash() -> Option<String> {
-    let output = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
-    }
-
-    let text = String::from_utf8(output.stdout).ok()?;
-    Some(text.trim().to_string())
-}
-
 fn rustc_version() -> Option<String> {
     let output = Command::new("rustc").args(["--version"]).output().ok()?;
 
@@ -131,12 +118,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rustc-env=APP_BUILD_DEPS={build_deps}");
 
     // Git
-    let git_remote = git_remote_name()?;
-    let git_remote_url = git_remote_url("origin").unwrap_or_else(|| "<unknown>".to_string());
-    let git_branch = git_branch_name()?;
-    let git_commit = git_commit_hash().unwrap_or_else(|| "<unknown>".to_string());
+    let git_remote_url = git_remote_url("origin").unwrap_or(String::new());
+    let git_branch = git_branch_name().unwrap_or(String::new());
+    let git_commit = git_commit_hash().unwrap_or(String::new());
 
-    println!("cargo:rustc-env=APP_GIT_REMOTE={git_remote}");
     println!("cargo:rustc-env=APP_GIT_REMOTE_URL={git_remote_url}");
     println!("cargo:rustc-env=APP_GIT_BRANCH={git_branch}");
     println!("cargo:rustc-env=APP_GIT_COMMIT={git_commit}");
