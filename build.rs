@@ -110,7 +110,7 @@ fn rustc_version() -> Option<String> {
     Some(text.trim().to_string())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     let normal_deps = deps_via_cargo_tree("normal")?;
     let build_deps = deps_via_cargo_tree("build")?;
 
@@ -118,9 +118,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("cargo:rustc-env=APP_BUILD_DEPS={build_deps}");
 
     // Git
-    let git_remote_url = git_remote_url("origin").unwrap_or(String::new());
-    let git_branch = git_branch_name().unwrap_or(String::new());
-    let git_commit = git_commit_hash().unwrap_or(String::new());
+    let git_remote_url = git_remote_url("origin").unwrap_or_default();
+    let git_branch = git_branch_name().unwrap_or_default();
+    let git_commit = git_commit_hash().unwrap_or_default();
 
     println!("cargo:rustc-env=APP_GIT_REMOTE_URL={git_remote_url}");
     println!("cargo:rustc-env=APP_GIT_BRANCH={git_branch}");
