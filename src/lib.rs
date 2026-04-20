@@ -1,6 +1,8 @@
 use log::{debug, error, info};
-use std::fs;
-use std::process::{exit, Command};
+use std::io::Read;
+use std::process::{exit, Command, Stdio};
+use std::time::{Duration, Instant};
+use std::{fs, io, thread};
 use toml::Table;
 
 fn read_file(filename: &str, ignore_not_exists: bool) -> String {
@@ -60,6 +62,66 @@ pub fn run_cmd(mut cmd: Command, dry_run: bool) -> (u8, String) {
                 cmd.get_current_dir().unwrap_or("./".as_ref())
             );
             exit(1);
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum RunCmdError {
+    Spawn(io::Error),
+    Timeout(u64),
+    Wait(io::Error),
+    StdoutRead(io::Error),
+    Utf8(std::string::FromUtf8Error),
+}
+
+pub fn run_cmd_with_timeout(
+    mut cmd: Command,
+    dry_run: bool,
+    timeout_ms: u64,
+) -> Result<(u8, String), RunCmdError> {
+    if dry_run {
+        let program_str = cmd.get_program().to_string_lossy();
+        let args_str = cmd
+            .get_args()
+            .map(|arg| arg.to_string_lossy())
+            .collect::<Vec<_>>()
+            .join(" ");
+        info!("Dry-Run: {program_str} {args_str}");
+        return Ok((0, String::new()));
+    }
+
+    cmd.stdout(Stdio::piped());
+    cmd.stderr(Stdio::null()); // or Stdio::piped() if you also want stderr
+
+    let mut child = cmd.spawn().map_err(RunCmdError::Spawn)?;
+
+    let stdout = child.stdout.take();
+
+    let deadline = Instant::now() + Duration::from_millis(timeout_ms);
+
+    loop {
+        match child.try_wait().map_err(RunCmdError::Wait)? {
+            Some(status) => {
+                let code = status.code().unwrap_or(1) as u8;
+
+                let mut stdout_str = String::new();
+                if let Some(mut out) = stdout {
+                    let mut buf = Vec::new();
+                    out.read_to_end(&mut buf).map_err(RunCmdError::StdoutRead)?;
+                    stdout_str = String::from_utf8(buf).map_err(RunCmdError::Utf8)?;
+                }
+
+                return Ok((code, stdout_str));
+            }
+            None => {
+                if Instant::now() >= deadline {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(RunCmdError::Timeout(timeout_ms));
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
         }
     }
 }
